@@ -4,7 +4,7 @@ Simple image tiling script for the SpatialEye ST App.
 
 Requirements
 ------------
-Python 3, NumPy, SciPy
+Python 3, SciPy
 
 Usage
 -----

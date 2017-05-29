@@ -10,9 +10,7 @@ from math import ceil, log2
 
 import os
 
-import numpy as np
-
-from scipy.misc import imread, imsave
+from scipy.misc import imread, imsave, imresize
 
 
 DEF_TILE_SIZE = [256, 256]
@@ -36,23 +34,7 @@ def zoom(img):
     zoomed : numpy.ndarray
         The zoomed image.
     """
-    ret = np.zeros(
-        [ceil(d / 2) for d in img.shape[:2]] + list(img.shape[2:]),
-        dtype=np.uint8,
-    )
-    for (row, col) in (
-            (r, c)
-            for r in range(ceil(img.shape[0] / 2))
-            for c in range(ceil(img.shape[1] / 2))
-    ):
-        ret[row, col] = np.round(np.sum(
-            img[
-                slice(2 * row, 2 * (row + 1)),
-                slice(2 * col, 2 * (col + 1))
-            ],
-            axis=(0, 1),
-        ) / 4)
-    return ret
+    return imresize(img, 50)
 
 def gettiles(tile_shape, img):
     """
