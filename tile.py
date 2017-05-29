@@ -4,21 +4,113 @@
 
 import argparse as ap
 
+from functools import partial
+
 import logging
 
 from math import ceil, log2
 
 import os
 
+import queue
+
+import threading
+
 from scipy.misc import imread, imsave, imresize
 
 
 DEF_TILE_SIZE = [256, 256]
 
+DEF_THREADS = 8
+
 
 logging.basicConfig(format='[%(asctime)s]  %(message)s')
 LOG = logging.getLogger()
 
+
+class Threader(object):
+    """
+    Helper class for multithreading tasks.
+
+    Parameters
+    ----------
+    nthreads : int
+        The number of threads to use.
+    """
+    def __init__(self, nthreads):
+        self.queue = queue.Queue()
+        self.nthreads = nthreads
+        self.threads = []
+
+    def add(self, item):
+        """
+        Add task to queue.
+
+        Parameters
+        ----------
+        item : callable
+            The job to be executed.
+
+        Returns
+        -------
+        self : Threader
+            The current instance.
+        """
+        self.queue.put(item)
+        return self
+
+    def await(self):
+        """
+        Wait for all queued tasks to complete.
+
+        Returns
+        -------
+        self : Threader
+            The current instance.
+        """
+        self.queue.join()
+        return self
+
+    def start(self):
+        """
+        Start task consumption.
+
+        Returns
+        -------
+        self : Threader
+            The current instance.
+        """
+        self.threads.clear()
+        for _ in range(self.nthreads):
+            thread = threading.Thread(target=self._worker)
+            self.threads.append(thread)
+            thread.start()
+        return self
+
+    def stop(self):
+        """
+        Wait for all queued tasks to complete and stop all threads.
+
+        Returns
+        -------
+        self : Threader
+            The current instance.
+        """
+        self.await()
+        for _ in self.threads:
+            self.queue.put(None)
+        for thread in self.threads:
+            thread.join()
+        return self
+
+    def _worker(self):
+        """Worker event loop"""
+        while True:
+            job = self.queue.get()
+            if job is None:
+                break
+            job()
+            self.queue.task_done()
 
 def zoom(img):
     """
@@ -154,6 +246,9 @@ def climain():
     opt.add_argument('--silent', action='store_true',
                      help='suppress output to stdout. note: output to stderr '
                           'is not suppressed.')
+    opt.add_argument('--threads', type=int, default=DEF_THREADS,
+                     help='number of threads to use for file I/O. '
+                          'default = {:d}'.format(DEF_THREADS))
     opt = opt.parse_args()
 
     if opt.silent:
@@ -161,12 +256,14 @@ def climain():
     else:
         LOG.setLevel(logging.INFO)
 
+    threader = Threader(opt.threads).start()
     for curtile, row, col, lvl in tile(
             opt.shape,
             imread(opt.input),
-            opt.levels,
+            opt.levels
     ):
-        save(opt.output, row, col, lvl, curtile)
+        threader.add(partial(save, opt.output, row, col, lvl, curtile))
+    threader.stop()
 
 if __name__ == "__main__":
     climain()
