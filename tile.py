@@ -20,7 +20,8 @@ import threading
 
 import numpy as np
 
-from scipy.misc import imread, imsave, imresize
+from scipy.misc import imread, imsave
+from scipy.ndimage.interpolation import zoom as libzoom
 
 
 class Corner(Enum):
@@ -153,7 +154,8 @@ def zoom(img):
     zoomed : numpy.ndarray
         The zoomed image.
     """
-    return imresize(img, 50)
+    LOG.info('Zooming image.')
+    return libzoom(img, (0.5, 0.5, 1), order=0)
 
 def pad(corner, shape, img, fill=None, order='C'):
     """
