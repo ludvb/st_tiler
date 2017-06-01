@@ -155,9 +155,11 @@ def zoom(img):
     """
     return imresize(img, 50)
 
-def pad(corner, shape, img, fill=None):
+def pad(corner, shape, img, fill=None, order='C'):
     """
     Pad image to shape by expanding the image array from a given corner.
+
+    The operation is done in-place.
 
     Parameters
     ----------
@@ -170,33 +172,40 @@ def pad(corner, shape, img, fill=None):
         The input image.
     fill : numpy.ndarray, optional
         The value to fill the padded pixels with.
-
-    Returns
-    -------
-    padded_img : numpy.ndarray
-        The padded image.
+    order : str, optional
+        Array order. Default = 'C'.
     """
-    new_shape = list(shape) + list(img.shape[2:])
-    top, left = [r - s for (r, s) in zip(new_shape[:2], img.shape[:2])]
-    if top < 0 or left < 0:
+    old_shape = img.shape[:2]
+    px_shape = img.shape[2:]
+    px_len = np.prod(px_shape)
+    new_shape = tuple(list(shape) + list(px_shape))
+
+    if fill is None:
+        fill = np.zeros(px_shape)
+
+    marv, marh = [r - s for (r, s) in zip(shape, old_shape)]
+    if marv < 0 or marh < 0:
         raise ValueError('Target shape is smaller than the shape of the image.')
-    bottom, right = 0, 0
-    if corner == Corner.SouthWest or corner == Corner.NorthWest:
-        left, right = right, left
-    if corner == Corner.NorthWest or corner == Corner.NorthEast:
+
+    top, bottom = 0, marv
+    if corner == Corner.SouthWest or corner == Corner.SouthEast:
         top, bottom = bottom, top
-    bottom, right = [s - x for (s, x) in zip(new_shape[:2], (bottom, right))]
-    padded_img = np.zeros(new_shape, dtype=np.uint8)
-    padded_img[top:bottom, left:right] = img
-    if fill is not None:
-        if fill.shape != img.shape[2:]:
-            raise ValueError('Fill value has invalid shape.')
-        padded_img[:top, :] = \
-            padded_img[bottom:, :] = \
-            padded_img[:, :left] = \
-            padded_img[:, right:] = \
-            fill
-    return padded_img
+    bottom = new_shape[0] - bottom - 1
+
+    left, right = 0, marh
+    if corner == Corner.NorthEast or corner == Corner.SouthEast:
+        left, right = right, left
+    right = new_shape[1] - right - 1
+
+    img.resize(new_shape, refcheck=False)
+    flat = np.ravel(img, order=order)
+    for row in reversed(range(old_shape[0])):
+        old_idx = row * old_shape[1]
+        new_idx = (row + top) * shape[1] + left
+        flat[new_idx * px_len : (new_idx + old_shape[1]) * px_len] = \
+            flat[old_idx * px_len : (old_idx + old_shape[1]) * px_len]
+
+    img[:top, :] = img[bottom:, :] = img[:, :left] = img[:, right:] = fill
 
 def tilecoordinates(order, corner, shape, coordinates):
     """
@@ -253,13 +262,21 @@ def gettiles(tile_shape, img, corner=Corner.SouthWest, order=Order.ColMajor):
         A 2-tuple `(r, c)` where `r` is the current row and `c` is the current
         column.
     """
-    rows, cols = [ceil(s / t) for (s, t) in zip(img.shape, tile_shape)]
+    if not all(map(lambda x: (x[0] % x[1]) == 0, zip(img.shape, tile_shape))):
+        LOG.warning('Image shape is not divisible by tile shape. '
+                    'Image will be padded.')
+        pad(
+            corner,
+            [
+                s * n for (s, n) in zip(
+                    tile_shape,
+                    [ceil(s / t) for (s, t) in zip(img.shape, tile_shape)]
+                )
+            ],
+            img,
+        )
+    rows, cols = map(lambda x: x[0] // x[1], zip(img.shape, tile_shape))
     tilecoordinates_ = partial(tilecoordinates, order, corner, (rows, cols))
-    img = pad(
-        corner,
-        [s * n for (s, n) in zip(tile_shape, (rows, cols))],
-        img,
-    )
     for (row, col) in ((r, c) for r in range(rows) for c in range(cols)):
         yield (
             img[
