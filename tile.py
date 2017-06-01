@@ -52,7 +52,7 @@ DEF_CORNER = Corner.SouthWest
 DEF_THREADS = 8
 
 
-logging.basicConfig(format='[%(asctime)s]  %(message)s')
+logging.basicConfig(format='[%(asctime)s :: %(threadName)s]  %(message)s')
 LOG = logging.getLogger()
 
 
