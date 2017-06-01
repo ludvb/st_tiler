@@ -300,7 +300,7 @@ def tile(tile_shape, img, nlevels=None):
         if level > 0:
             img = zoom(img)
 
-def save(output_dir, row, col, lvl, image_tile):
+def save(output_dir, major, minor, level, image_tile):
     """
     Save tile according to the format required by the SpatialEye ST app.
 
@@ -308,25 +308,28 @@ def save(output_dir, row, col, lvl, image_tile):
     ----------
     output_dir : str
         Root output directory.
-    maj : int
+    major : int
         The major order coordinate of the tile. For example, if the tiles are
         given in `Order.RowMajor` order, this is the row of the tile.
-    min : int
+    minor : int
         The minor order coordinate of the tile.
-    lvl : int
+    level : int
         The zoom level of the tile.
     image_tile : numpy.ndarray
         The tile to save.
     """
     dirname = os.path.join(
         output_dir,
-        str(lvl),
-        str(row),
+        str(level),
+        str(major),
     )
-    basename = '{:d}.png'.format(col)
+    basename = '{:d}.png'.format(minor)
     filename = os.path.join(dirname, basename)
     LOG.info('Writing tile lxrxc={:d}x{:d}x{:d} to {:s}.'.format(
-        lvl, row, col, filename,
+        level,
+        major,
+        minor,
+        filename,
     ))
     os.makedirs(dirname, exist_ok=True)
     imsave(filename, image_tile)
