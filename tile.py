@@ -186,7 +186,7 @@ def pad(corner, shape, img, fill=None):
     if corner == Corner.NorthWest or corner == Corner.NorthEast:
         top, bottom = bottom, top
     bottom, right = [s - x for (s, x) in zip(new_shape[:2], (bottom, right))]
-    padded_img = np.zeros(new_shape)
+    padded_img = np.zeros(new_shape, dtype=np.uint8)
     padded_img[top:bottom, left:right] = img
     if fill is not None:
         if fill.shape != img.shape[2:]:
