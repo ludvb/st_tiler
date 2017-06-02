@@ -210,6 +210,7 @@ class Threader(object):
             job()
             self.queue.task_done()
 
+
 def zoom(img):
     """
     Zoom image by a factor of 2.
@@ -240,7 +241,7 @@ def pad(corner, shape, img, fill=None, order='C'):
     ----------
     corner : Corner
         The corner to expand from.
-    shape : array-like
+    shape : array_like
         Target shape. Must be a 2-tuple in which each coordinate is greater than
         or equal to `img[:2]`.
     img : numpy.ndarray
@@ -308,8 +309,8 @@ def tilecoordinates(order, corner, shape, coordinates):
     Returns
     -------
     new_coordinates : tuple
-        A 2-tuple `(r, c)` where `r` is the current row and `c` is the current
-        column of the tile.
+        A 2-tuple `(maj, min)` where `maj` is the major index and `min` is the
+        minor index of the tile.
     """
     rows, cols = shape
     row, col = coordinates
@@ -323,9 +324,13 @@ def gettiles(tile_shape, img, corner=Corner.SouthWest, order=Order.ColMajor):
     """
     Tile image.
 
+    *Note about side-effects*: If the shape of the image is not divisible by the
+    tile shape, the image will be padded. Padding is done in-place, so the `img`
+    object will be modified.
+
     Parameters
     ----------
-    tile_shape : array-like
+    tile_shape : array_like
         The shape of the tiles.
     img : numpy.ndarray
         The input image.
@@ -339,8 +344,8 @@ def gettiles(tile_shape, img, corner=Corner.SouthWest, order=Order.ColMajor):
     tile : numpy.ndarray
         The output tile.
     coordinate : tuple
-        A 2-tuple `(r, c)` where `r` is the current row and `c` is the current
-        column.
+        A 2-tuple `(maj, min)` where `maj` is the major index and `min` is the
+        minor index of the tile.
     """
     if not all(map(lambda x: (x[0] % x[1]) == 0, zip(img.shape, tile_shape))):
         LOG.warning('Image shape is not divisible by tile shape. '
@@ -372,17 +377,24 @@ def tile(tile_shape, img, nlevels=None):
 
     Parameters
     ----------
-    tile_shape : array-like
+    tile_shape : array_like
         The shape of the tiles.
     img : numpy.ndarray
         The input image.
-    nlevels : int
-        The maximum zoom level.
+    nlevels : {None, int}, optional
+        The maximum zoom level. If set to n, 2^n px in the input image will
+        correspond to 1 px in the tiled image on the lowest (0:th) zoom level.
+        If set to None, will be set to the smallest value needed to fit the
+        entire image on a single tile at the lowest zoom level. Default: None.
 
     Yields
     ------
-    tiles : list
-        List of the tiles at a certain `level`
+    tile : numpy.ndarray
+        The output tile.
+    major : int
+        The major index of the tile.
+    minor : int
+        The minor index of the tile.
     level : int
         The zoom level of the `tiles`
     """
@@ -392,8 +404,8 @@ def tile(tile_shape, img, nlevels=None):
             for (s, t) in zip(img.shape, tile_shape)
         ])
     for level in reversed(range(nlevels)):
-        for curtile, (row, col) in gettiles(tile_shape, img):
-            yield curtile, row, col, level
+        for curtile, (major, minor) in gettiles(tile_shape, img):
+            yield curtile, major, minor, level
         if level > 0:
             img = zoom(img)
 
