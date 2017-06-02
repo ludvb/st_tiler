@@ -52,7 +52,77 @@ DEF_CORNER = Corner.SouthWest
 DEF_THREADS = 8
 
 
-logging.basicConfig(format='[%(asctime)s :: %(threadName)s]  %(message)s')
+class FormattedLogRecord(logging.LogRecord):
+    """LogRecord that accepts used-defined format codes"""
+    # pylint: disable=too-few-public-methods
+    def __init__(self, fmt_codes, *args):
+        for key, val in fmt_codes.items():
+            setattr(self, key, val)
+        super().__init__(*args)
+
+class FormattedLogRecordFactory(object):
+    """Factory for `FormattedLogRecord`"""
+    # pylint: disable=too-few-public-methods
+    color_codes = {
+        'green': '\033[92m',
+        'blue': '\033[94m',
+        'red': '\033[91m',
+        'purple': '\033[95m',
+        'bold': '\033[1m',
+        'end': '\033[0m',
+    }
+
+    def __init__(self, level_formats):
+        self.level_formats = level_formats
+
+    def __call__(self, name, level, fname, lno, msg, args, exc_info,
+                 _func=None, _sinfo=None, **kwargs):
+        # pylint: disable=too-many-arguments
+        return FormattedLogRecord(
+            {
+                'start': self.level_formats[logging.getLevelName(level)],
+                'end': self.color_codes['end'],
+            },
+            name, level, fname, lno, msg, args, exc_info,
+        )
+
+
+# Set up the logger
+logging.basicConfig(
+    format=(
+        '{:s}[{:s}'.format(
+            FormattedLogRecordFactory.color_codes['bold'],
+            FormattedLogRecordFactory.color_codes['end'],
+        ) +
+        '%(asctime)s' +
+        '{:s} : {:s}'.format(
+            FormattedLogRecordFactory.color_codes['bold'],
+            FormattedLogRecordFactory.color_codes['end'],
+        ) +
+        '%(threadName)s' +
+        '{:s} : {:s}'.format(
+            FormattedLogRecordFactory.color_codes['bold'],
+            FormattedLogRecordFactory.color_codes['end'],
+        ) +
+        '%(filename)s:%(lineno)d' +
+        '{:s}]{:s}'.format(
+            FormattedLogRecordFactory.color_codes['bold'],
+            FormattedLogRecordFactory.color_codes['end'],
+        ) +
+        '  %(start)s{:s}%(levelname)s{:s}%(start)s: %(message)s%(end)s'.format(
+            FormattedLogRecordFactory.color_codes['bold'],
+            FormattedLogRecordFactory.color_codes['end'],
+        )
+    )
+)
+logging.setLogRecordFactory(FormattedLogRecordFactory(
+    level_formats={
+        'WARNING': FormattedLogRecordFactory.color_codes['bold'] + \
+            FormattedLogRecordFactory.color_codes['red'],
+        'INFO': FormattedLogRecordFactory.color_codes['green'],
+        'DEBUG': FormattedLogRecordFactory.color_codes['purple'],
+    }
+))
 LOG = logging.getLogger()
 
 
@@ -154,7 +224,10 @@ def zoom(img):
     zoomed : numpy.ndarray
         The zoomed image.
     """
-    LOG.info('Zooming image.')
+    LOG.info('Zooming image from {:d}x{:d} to {:d}x{:d}.'.format(
+        *img.shape[:2],
+        *[s // 2 for s in img.shape[:2]],
+    ))
     return libzoom(img, (0.5, 0.5, 1), order=0)
 
 def pad(corner, shape, img, fill=None, order='C'):
@@ -198,6 +271,11 @@ def pad(corner, shape, img, fill=None, order='C'):
     if corner == Corner.NorthEast or corner == Corner.SouthEast:
         left, right = right, left
     right = new_shape[1] - right - 1
+
+    LOG.info('Padding image from {:d}x{:d} to {:d}x{:d}'.format(
+        *old_shape[:2],
+        *new_shape[:2],
+    ))
 
     img.resize(new_shape, refcheck=False)
     flat = np.ravel(img, order=order)
@@ -344,7 +422,7 @@ def save(output_dir, major, minor, level, image_tile):
     )
     basename = '{:d}.png'.format(minor)
     filename = os.path.join(dirname, basename)
-    LOG.info('Writing tile lxrxc={:d}x{:d}x{:d} to {:s}.'.format(
+    LOG.debug('Writing tile lxrxc={:d}x{:d}x{:d} to {:s}.'.format(
         level,
         major,
         minor,
@@ -368,9 +446,11 @@ def climain():
                           'will be set to the smallest value needed to fit the '
                           'entire image on a single tile at the lowest zoom '
                           'level.')
+    opt.add_argument('-v', '--verbose', action='store_true',
+                     help='verbose output.')
     opt.add_argument('--silent', action='store_true',
-                     help='suppress output to stdout. note: output to stderr '
-                          'is not suppressed.')
+                     help='suppress all log messages that are not warnings or '
+                          'errors')
     opt.add_argument('--threads', type=int, default=DEF_THREADS,
                      help='number of threads to use for file I/O. '
                           'default = {:d}'.format(DEF_THREADS))
@@ -378,6 +458,8 @@ def climain():
 
     if opt.silent:
         LOG.setLevel(logging.WARN)
+    elif opt.verbose:
+        LOG.setLevel(logging.DEBUG)
     else:
         LOG.setLevel(logging.INFO)
 
@@ -388,7 +470,9 @@ def climain():
             opt.levels
     ):
         threader.add(partial(save, opt.output, row, col, lvl, curtile))
+    LOG.info('Waiting for threads to finish writing.')
     threader.stop()
+    LOG.info('Done.')
 
 if __name__ == "__main__":
     climain()
