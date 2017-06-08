@@ -1,5 +1,5 @@
-ST image tiler
-==============
+teyeler
+=======
 Simple image tiling script for the SpatialEye ST App.
 
 Requirements
@@ -11,12 +11,12 @@ Usage
 1. Copy `tile.py` to a directory of your choice or simply clone the repository:
 
 ```sh
-git clone https://github.com/ludvb/st_tiler /path/to/my/cool/directory
+git clone https://github.com/ludvb/teyeler /path/to/teyeler
 ```
 
 2. Run the tiler:
 
 ```sh
-cd /path/to/my/cool/directory
-./tiler.py -i /path/to/input/image -o /path/to/output/directory
+cd /path/to/teyeler
+./teyeler.py -i /path/to/input/image -o /path/to/output/directory
 ```
